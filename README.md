@@ -1,1 +1,1 @@
-# LSTM_tak
+# LSTM_task
