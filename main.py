@@ -60,14 +60,16 @@ def train(iterations=400):
                 output, hidden = model.forward(input=rnn_input, hidden=hidden)  # прямое распространение
 
                 target = Tensor(target_batches[batch_i][t], autograd=True)
+                # считаем потери
                 batch_loss = criterion.forward(output, target)
                 losses.append(batch_loss)
                 if t == 0:
                     loss = batch_loss
                 else:
                     loss = loss + batch_loss
-            for loss in losses:
-                ""
+            loss = losses[-1]
+
+            # обратный ход
             loss.backward()
             optim.step()
 

@@ -78,13 +78,13 @@ class LSTMCell(Layer):
         prev_hidden = hidden[0]
         prev_cell = hidden[1]
 
-        f = (self.xf.forward(input) + self.hf.forward(prev_hidden)).sigmoid()
-        i = (self.xi.forward(input) + self.hi.forward(prev_hidden)).sigmoid()
-        o = (self.xo.forward(input) + self.ho.forward(prev_hidden)).sigmoid()
-        g = (self.xc.forward(input) + self.hc.forward(prev_hidden)).tanh()
-        c = (f * prev_cell) + (i * g)
+        f = (self.xf.forward(input) + self.hf.forward(prev_hidden)).sigmoid()  # вентиль забывания
+        i = (self.xi.forward(input) + self.hi.forward(prev_hidden)).sigmoid()  # входной вентиль
+        o = (self.xo.forward(input) + self.ho.forward(prev_hidden)).sigmoid()  # выходной вентиль
+        u = (self.xc.forward(input) + self.hc.forward(prev_hidden)).tanh()  # вентиль обновления
+        c = (f * prev_cell) + (i * u)
 
-        h = o * c.tanh()
+        h = o * c.tanh()  # скрытый слой
 
         output = self.w_ho.forward(h)
         return output, (h, c)
