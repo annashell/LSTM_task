@@ -213,8 +213,7 @@ class Tensor(object):
         return Tensor(np.tanh(self.data))
 
     def index_select(self, indices):
-
-        if (self.autograd):
+        if self.autograd:
             new = Tensor(self.data[indices.data],
                          autograd=True,
                          creators=[self],

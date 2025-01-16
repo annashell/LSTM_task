@@ -83,8 +83,8 @@ def train(iterations=400):
             log += " - Batch " + str(batch_i + 1) + "/" + str(len(input_batches))
             log += " - Min Loss:" + str(min_loss)[0:5]
             log += " - Loss:" + str(np.exp(total_loss / (batch_i + 1)))
-            if (batch_i == 0):
-                log += " - " + generate_sample(n=70, init_char='\n').replace("\n", " ")
+            # if (batch_i == 0):
+            log += " - " + generate_sample(n=70, init_char='\n').replace("\n", " ")
 
             sys.stdout.write(log)
         optim.alpha *= 0.99
