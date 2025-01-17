@@ -225,8 +225,8 @@ def prepare_data(data_folder, xLen, step, max_words):
     return xTrain, yTrain, xTest, yTest, max_words
 
 
-def generate_prediction(model, xTest, yTest, vocabSize):
-    embed = Embedding(vocab_size=vocabSize, dim=128)
+def generate_prediction(model, xTest, yTest, vocabSize, hidden_layer_size):
+    embed = Embedding(vocab_size=vocabSize, dim=hidden_layer_size)
     hidden = model.init_hidden(batch_size=1)
     total_right_answers = 0
 
@@ -253,7 +253,7 @@ def generate_prediction(model, xTest, yTest, vocabSize):
     return val_accuracy
 
 
-def train(model, batch_size, xTrain, yTrain, xTest, yTest, vocabSize, bptt, iterations=100):
+def train(model, batch_size, xTrain, yTrain, xTest, yTest, vocabSize, bptt, hidden_layer_size, iterations=5):
     """
     Запуск обучения нейронной сети
     :param model:
@@ -267,7 +267,7 @@ def train(model, batch_size, xTrain, yTrain, xTest, yTest, vocabSize, bptt, iter
     :return:
     """
     model.w_ho.weight.data *= 0
-    embed = Embedding(vocab_size=vocabSize, dim=128)  # задаем эмбеддинг
+    embed = Embedding(vocab_size=vocabSize, dim=hidden_layer_size)  # задаем эмбеддинг
     criterion = CrossEntropyLoss()
     optim = SGD(parameters=model.get_parameters() + embed.get_parameters(),
                 alpha=0.05)  # оптимизатор - стох. градиентный спуск
@@ -328,9 +328,9 @@ def train(model, batch_size, xTrain, yTrain, xTest, yTest, vocabSize, bptt, iter
         #     generate_prediction(model, xTest, yTest, vocabSize, batch_size)
         optim.alpha *= 0.99
         print()
-        val_ac = generate_prediction(model, xTest, yTest, vocabSize)  # смотрим процент правильных ответов на данной итерации
+        val_ac = generate_prediction(model, xTest, yTest, vocabSize, hidden_layer_size)  # смотрим процент правильных ответов на данной итерации
         val_accuracy_arr.append(val_ac)
-        ac = generate_prediction(model, xTrain, yTrain, vocabSize)  # смотрим процент правильных ответов на данной итерации
+        ac = generate_prediction(model, xTrain, yTrain, vocabSize, hidden_layer_size)  # смотрим процент правильных ответов на данной итерации
         accuracy_arr.append(ac)
         print(f"\n Процент правильных ответов: {ac}%")
         print(f"\n Процент правильных ответов на тестовой выборке: {val_ac}%")
@@ -347,10 +347,11 @@ def launch_training():
     batch_size = 64  # Длина отрезка текста, по которой анализируем, в словах
     bptt = 25  # граница усечения (количество шагов обратного распространения)
     max_words = 5000  # максимальное число слов для обучения
+    hidden_layer_size = 128
 
     xTrain, yTrain, xTest, yTest, vocabSize = prepare_data(r"data/Тексты писателей", batch_size, step, max_words)  # получаем тестовую и обучающую выборки
-    model = LSTMCell(n_inputs=128, n_hidden=128, n_output=6)  # LSTM сеть с размерностью скрытого состояния 512
-    model, accuracy_arr, val_accuracy_arr = train(model, batch_size, xTrain, yTrain, xTest, yTest, vocabSize, bptt) # обучаем сеть
+    model = LSTMCell(n_inputs=hidden_layer_size, n_hidden=hidden_layer_size, n_output=6)  # LSTM сеть с размерностью скрытого состояния hidden_layer_size
+    model, accuracy_arr, val_accuracy_arr = train(model, batch_size, xTrain, yTrain, xTest, yTest, vocabSize, bptt, hidden_layer_size) # обучаем сеть
 
     # Строим график для отображения динамики обучения и точности предсказания сети
     plt.figure(figsize=(14, 7))
@@ -361,7 +362,7 @@ def launch_training():
     plt.xlabel('Эпоха обучения')
     plt.ylabel('Доля верных ответов')
     plt.legend()
-    plt.savefig("val_ac.png")
+    plt.savefig(f"val_ac{batch_size}_{step}_{hidden_layer_size}.png")
 
 if __name__ == '__main__':
     launch_training()
