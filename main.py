@@ -1,5 +1,5 @@
 """
-Классификатор текстов писателей на LSTM, попробовать GRU
+Классификатор текстов писателей на LSTM
 """
 import glob
 import re
@@ -20,17 +20,21 @@ def readText(fileName):  # функция принимает имя файла
     f = open(fileName, 'r', encoding="UTF-8")  # задаем открытие нужного файла в режиме чтения
     text = f.read()  # читаем текст
     text = text.replace("\n", " ")  # переносы строки переводим в пробелы
-    text = re.sub('[–—!"#$%&«»…()*+,-./:;<=>?@[\\]^_`{|}~\t\n\xa0–\ufeff]', ' ', text)
+    text = re.sub('[–—!"#$%&«»…()*+,-./:;<=>?@[\\]^_`{|}~\t\n\xa0–\ufeff]', ' ', text) # удаляем лишние символы
 
     # return text.lower()[:(len(text) // 2)]  # функция возвращает текст файла
     return text.lower()[:(len(text) // 10)]
 
 
-###########################
-# Формирование обучающей выборки по листу индексов слов
-# (разделение на короткие векторы)
-##########################
 def getSetFromIndexes(wordIndexes, xLen, step):
+    """
+    Формирование обучающей выборки по листу индексов слов
+    (разделение на короткие векторы)
+    :param wordIndexes: входной вектор
+    :param xLen: шаг разбиения
+    :param step: размер разбиения
+    :return:
+    """
     xSample = []
     wordsLen = len(wordIndexes)
     index = 0
@@ -46,10 +50,23 @@ def getSetFromIndexes(wordIndexes, xLen, step):
 
 
 def to_categorical(num, n_classes):
+    """
+    Представление номера писателя в виде вектора вида [1, 0, 0, 0, 0, 0]
+    1 соответствует номеру писателя
+    :param num:
+    :param n_classes:
+    :return:
+    """
     return [int(num == i) for i in range(n_classes)]
 
 
 def shuffle_samples(xSamples, ySamples):
+    """
+    Перемешивает значения двух векторов в одинаковом порядке
+    :param xSamples:
+    :param ySamples:
+    :return:
+    """
     indices = np.random.permutation(len(xSamples))
 
     # Перемешивание первого вектора
@@ -103,6 +120,14 @@ def createSetsMultiClasses(wordIndexes, xLen, step):
 
 
 def prepare_data(data_folder, xLen, step, max_words):
+    """
+    Подготовка обучающего и тесового наборов данных
+    :param data_folder: папка с текстами
+    :param xLen: размер батча
+    :param step: смещение
+    :param max_words: ограничение размера словаря
+    :return:
+    """
     txt_files = glob.glob(f"{data_folder}/*.txt", recursive=True)
 
     # Загружаем обучающие тексты
@@ -227,6 +252,18 @@ def generate_prediction(model, xTest, yTest, vocabSize, batch_size):
 
 
 def train(model, batch_size, xTrain, yTrain, xTest, yTest, vocabSize, iterations=100):
+    """
+    Запуск обучения нейронной сети
+    :param model:
+    :param batch_size:
+    :param xTrain:
+    :param yTrain:
+    :param xTest:
+    :param yTest:
+    :param vocabSize:
+    :param iterations:
+    :return:
+    """
     model.w_ho.weight.data *= 0
     embed = Embedding(vocab_size=vocabSize, dim=512)  # задаем эмбеддинг
     criterion = CrossEntropyLoss()
@@ -293,10 +330,14 @@ def train(model, batch_size, xTrain, yTrain, xTest, yTest, vocabSize, iterations
 
 
 def launch_training():
+    """
+    Запуск обучения и проверки
+    :return:
+    """
     # Задаём базовые параметры
     step = 16  # Шаг разбиения исходного текста на обучающие вектора
     batch_size = 32  # Длина отрезка текста, по которой анализируем, в словах
-    max_words = 5000  # максимальное число слов для обучения
+    max_words = 1000  # максимальное число слов для обучения
 
     xTrain, yTrain, xTest, yTest, vocabSize = prepare_data(r"data/Тексты писателей", batch_size, step, max_words)  # получаем тестовую и обучающую выборки
     model = LSTMCell(n_inputs=512, n_hidden=512, n_output=6)  # LSTM сеть с размерностью скрытого состояния 512
