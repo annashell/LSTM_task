@@ -6,6 +6,7 @@ import re
 import sys
 
 import numpy as np
+import matplotlib.pyplot as plt
 
 from classes.Embedding import Embedding
 from classes.SGD import SGD
@@ -224,8 +225,8 @@ def prepare_data(data_folder, xLen, step, max_words):
     return xTrain, yTrain, xTest, yTest, max_words
 
 
-def generate_prediction(model, xTest, yTest, vocabSize, batch_size):
-    embed = Embedding(vocab_size=vocabSize, dim=512)
+def generate_prediction(model, xTest, yTest, vocabSize):
+    embed = Embedding(vocab_size=vocabSize, dim=128)
     hidden = model.init_hidden(batch_size=1)
     total_right_answers = 0
 
@@ -248,10 +249,11 @@ def generate_prediction(model, xTest, yTest, vocabSize, batch_size):
         m = vars_count.index(max(vars_count))
 
         total_right_answers += int((sum(possible_vars[m] == yTest[i])) / 6)
-    print(f"\n Процент правильных ответов: {round(total_right_answers / len(xTest) * 100, 2)}%")
+    val_accuracy = round(total_right_answers / len(xTest) * 100, 2)
+    return val_accuracy
 
 
-def train(model, batch_size, xTrain, yTrain, xTest, yTest, vocabSize, iterations=100):
+def train(model, batch_size, xTrain, yTrain, xTest, yTest, vocabSize, bptt, iterations=100):
     """
     Запуск обучения нейронной сети
     :param model:
@@ -265,12 +267,10 @@ def train(model, batch_size, xTrain, yTrain, xTest, yTest, vocabSize, iterations
     :return:
     """
     model.w_ho.weight.data *= 0
-    embed = Embedding(vocab_size=vocabSize, dim=512)  # задаем эмбеддинг
+    embed = Embedding(vocab_size=vocabSize, dim=128)  # задаем эмбеддинг
     criterion = CrossEntropyLoss()
     optim = SGD(parameters=model.get_parameters() + embed.get_parameters(),
                 alpha=0.05)  # оптимизатор - стох. градиентный спуск
-
-    bptt = 25  # граница усечения (количество шагов обратного распространения)
 
     n_batches = xTrain.shape[0]  # число батчей
 
@@ -278,6 +278,9 @@ def train(model, batch_size, xTrain, yTrain, xTest, yTest, vocabSize, iterations
     # число элементов инпута разбивается по границам усечения, хвост отбрасывается
     input_batches = xTrain[:n_bptt * bptt].reshape(n_bptt, bptt, batch_size)
     target_batches = yTrain[:n_bptt * bptt].reshape(n_bptt, bptt, yTrain.shape[1])
+
+    val_accuracy_arr = []
+    accuracy_arr = []
 
     min_loss = 1000
     for iter in range(iterations):
@@ -325,8 +328,13 @@ def train(model, batch_size, xTrain, yTrain, xTest, yTest, vocabSize, iterations
         #     generate_prediction(model, xTest, yTest, vocabSize, batch_size)
         optim.alpha *= 0.99
         print()
-        generate_prediction(model, xTest, yTest, vocabSize, batch_size)  # смотрим процент правильных ответов на данной итерации
-    return model
+        val_ac = generate_prediction(model, xTest, yTest, vocabSize)  # смотрим процент правильных ответов на данной итерации
+        val_accuracy_arr.append(val_ac)
+        ac = generate_prediction(model, xTrain, yTrain, vocabSize)  # смотрим процент правильных ответов на данной итерации
+        accuracy_arr.append(ac)
+        print(f"\n Процент правильных ответов: {ac}%")
+        print(f"\n Процент правильных ответов на тестовой выборке: {val_ac}%")
+    return model, accuracy_arr, val_accuracy_arr
 
 
 def launch_training():
@@ -335,15 +343,25 @@ def launch_training():
     :return:
     """
     # Задаём базовые параметры
-    step = 16  # Шаг разбиения исходного текста на обучающие вектора
-    batch_size = 32  # Длина отрезка текста, по которой анализируем, в словах
-    max_words = 1000  # максимальное число слов для обучения
+    step = 32  # Шаг разбиения исходного текста на обучающие вектора
+    batch_size = 64  # Длина отрезка текста, по которой анализируем, в словах
+    bptt = 25  # граница усечения (количество шагов обратного распространения)
+    max_words = 5000  # максимальное число слов для обучения
 
     xTrain, yTrain, xTest, yTest, vocabSize = prepare_data(r"data/Тексты писателей", batch_size, step, max_words)  # получаем тестовую и обучающую выборки
-    model = LSTMCell(n_inputs=512, n_hidden=512, n_output=6)  # LSTM сеть с размерностью скрытого состояния 512
-    model = train(model, batch_size, xTrain, yTrain, xTest, yTest, vocabSize) # обучаем сеть
-    generate_prediction(model, xTest, yTest, vocabSize, batch_size) # смотрим процент правильных ответов
+    model = LSTMCell(n_inputs=128, n_hidden=128, n_output=6)  # LSTM сеть с размерностью скрытого состояния 512
+    model, accuracy_arr, val_accuracy_arr = train(model, batch_size, xTrain, yTrain, xTest, yTest, vocabSize, bptt) # обучаем сеть
 
+    # Строим график для отображения динамики обучения и точности предсказания сети
+    plt.figure(figsize=(14, 7))
+    plt.plot(accuracy_arr,
+             label='Доля верных ответов на обучающем наборе')
+    plt.plot(val_accuracy_arr,
+             label='Доля верных ответов на проверочном наборе')
+    plt.xlabel('Эпоха обучения')
+    plt.ylabel('Доля верных ответов')
+    plt.legend()
+    plt.savefig("val_ac.png")
 
 if __name__ == '__main__':
     launch_training()
