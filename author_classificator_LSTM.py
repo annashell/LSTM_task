@@ -2,7 +2,6 @@
 Классификатор текстов писателей на LSTM, попробовать GRU
 """
 import glob
-import os
 import re
 import sys
 
@@ -50,6 +49,18 @@ def to_categorical(num, n_classes):
     return [int(num == i) for i in range(n_classes)]
 
 
+def shuffle_samples(xSamples, ySamples):
+    indices = np.random.permutation(len(xSamples))
+
+    # Перемешивание первого вектора
+    shuffled_vector1 = xSamples[indices]
+
+    # Перемешивание второго вектора по тем же индексам
+    shuffled_vector2 = ySamples[indices]
+
+    return shuffled_vector1, shuffled_vector2
+
+
 ###########################
 # Формирование обучающей и проверочной выборки
 # Из двух листов индексов от двух классов
@@ -75,12 +86,14 @@ def createSetsMultiClasses(wordIndexes, xLen,
             xSamples.append(xT[i])  # добавляем в общий список выборки
 
         # Формируем ySamples по номеру класса
-        currY = to_categorical(t, xLen)  # текущий класс переводится в вектор длиной 6 вида [0.0.0.1.0.0.]
+        currY = to_categorical(t, nClasses)  # текущий класс переводится в вектор длиной 6 вида [0.0.0.1.0.0.]
         for i in range(len(xT)):  # на каждое окно выборки
             ySamples.append(currY)  # добавляем соответствующий вектор класса
 
     xSamples = np.array(xSamples)  # переводим в массив numpy для подачи в нейронку
     ySamples = np.array(ySamples)  # переводим в массив numpy для подачи в нейронку
+
+    xSamples, ySamples = shuffle_samples(xSamples, ySamples) # перемешиваем
 
     return xSamples, ySamples  # функция возвращает выборку и соответствующие векторы классов
 
@@ -124,7 +137,7 @@ def prepare_data(data_folder, xLen, step, max_words):
         if i < max_words - 1:
             word2index[word] = i
         else:
-            word2index[word] = max_words - 1 # ограничиваем словарь при обучении
+            word2index[word] = max_words - 1  # ограничиваем словарь при обучении
 
     # Переводим тексты в индексы
     input_dataset = list()
@@ -187,13 +200,13 @@ def generate_prediction(model, xTest, yTest, vocabSize, batch_size):
     hidden = model.init_hidden(batch_size=1)
     total_right_answers = 0
 
-    possible_vars = [[int(j == i) for j in range(batch_size)] for i in range(6)]
+    possible_vars = [[int(j == i) for j in range(6)] for i in range(6)]
 
     for i, input_test in enumerate(xTest):
         input = Tensor(input_test)
         rnn_input = embed.forward(input)
         output, hidden = model.forward(input=rnn_input, hidden=hidden)
-        output.data *= 15
+        output.data /= 10
         temp_dist = output.softmax()
         temp_dist /= temp_dist.sum()
 
@@ -205,14 +218,14 @@ def generate_prediction(model, xTest, yTest, vocabSize, batch_size):
         vars_count = [normalized_output_all.count(var) for var in possible_vars]
         m = vars_count.index(max(vars_count))
 
-        total_right_answers += int(sum(possible_vars[m] == yTest[i]) == batch_size)
+        total_right_answers += int((sum(possible_vars[m] == yTest[i])) / 6)
     print(f"\n Процент правильных ответов: {round(total_right_answers / len(xTest) * 100, 2)}%")
 
 
 def train(model, batch_size, xTrain, yTrain, vocabSize, iterations=100):
     model.w_ho.weight.data *= 0
     embed = Embedding(vocab_size=vocabSize, dim=512)  # задаем эмбеддинг
-    criterion = CategorialCrossEntropyLoss()
+    criterion = CrossEntropyLoss()
     optim = SGD(parameters=model.get_parameters() + embed.get_parameters(),
                 alpha=0.05)  # оптимизатор - стох. градиентный спуск
 
@@ -221,8 +234,9 @@ def train(model, batch_size, xTrain, yTrain, vocabSize, iterations=100):
     n_batches = xTrain.shape[0]  # число батчей
 
     n_bptt = int(((n_batches - 1) / bptt))
+    # число элементов инпута разбивается по границам усечения, хвост отбрасывается
     input_batches = xTrain[:n_bptt * bptt].reshape(n_bptt, bptt, batch_size)
-    target_batches = yTrain[:n_bptt * bptt].reshape(n_bptt, bptt, batch_size)
+    target_batches = yTrain[:n_bptt * bptt].reshape(n_bptt, bptt, yTrain.shape[1])
 
     min_loss = 1000
     for iter in range(iterations):
@@ -231,9 +245,9 @@ def train(model, batch_size, xTrain, yTrain, vocabSize, iterations=100):
         hidden = model.init_hidden(batch_size=batch_size)  # скрытый слой
         for batch_i in range(len(input_batches)):
 
-            # hidden = (Tensor(hidden[0].data, autograd=True),
-            #           Tensor(hidden[1].data, autograd=True))  # в отличие от RNN тут два скрытых вектора
-            hidden = Tensor(hidden.data, autograd=True)
+            hidden = (Tensor(hidden[0].data, autograd=True),
+                      Tensor(hidden[1].data, autograd=True))  # в отличие от RNN тут два скрытых вектора
+            # hidden = Tensor(hidden.data, autograd=True)
             loss = None
             losses = list()
             for t in range(bptt):
@@ -267,6 +281,7 @@ def train(model, batch_size, xTrain, yTrain, vocabSize, iterations=100):
             log += " - Min Loss:" + str(min_loss)[0:5]
             log += " - Loss:" + str(np.exp(total_loss / (batch_i + 1)))
             sys.stdout.write(log)
+        #     generate_prediction(model, xTest, yTest, vocabSize, batch_size)
         optim.alpha *= 0.99
         print()
         generate_prediction(model, xTest, yTest, vocabSize, batch_size)
@@ -276,11 +291,9 @@ def train(model, batch_size, xTrain, yTrain, vocabSize, iterations=100):
 # Задаём базовые параметры
 step = 100  # Шаг разбиения исходного текста на обучающие вектора
 batch_size = 16  # Длина отрезка текста, по которой анализируем, в словах
-max_words = 15000 # максимальное число слов для обучения
+max_words = 5000 # максимальное число слов для обучения
 
 xTrain, yTrain, xTest, yTest, vocabSize = prepare_data(r"data/Тексты писателей", batch_size, step, max_words)
-model = RNNCell(n_inputs=512, n_hidden=512, n_output=batch_size)  # LSTM сеть с размерностью скрытого состояния 512
+model = LSTMCell(n_inputs=512, n_hidden=512, n_output=6)  # LSTM сеть с размерностью скрытого состояния 512
 model = train(model, batch_size, xTrain, yTrain, vocabSize)
 generate_prediction(model, xTest, yTest, vocabSize, batch_size)
-
-# TODO уменьшить выборки в 10 раз, категориальная кроссэнтропия, в конце вернуть лстм

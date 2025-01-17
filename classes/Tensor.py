@@ -237,6 +237,29 @@ class Tensor(object):
                                        keepdims=True)
 
         t = target_indices.data.flatten()
+        p = softmax_output
+        # target_dist = np.eye(p.shape[1])[t]
+        target_dist = np.tile(t, p.shape[0]).reshape(p.shape[0], p.shape[1])
+        loss = -(np.log(p) * (target_dist)).sum(1).mean()
+
+        if (self.autograd):
+            out = Tensor(loss,
+                         autograd=True,
+                         creators=[self],
+                         creation_op="cross_entropy")
+            out.softmax_output = softmax_output
+            out.target_dist = target_dist
+            return out
+
+        return Tensor(loss)
+
+    def default_cross_entropy(self, target_indices):
+        temp = np.exp(self.data)
+        softmax_output = temp / np.sum(temp,
+                                       axis=len(self.data.shape) - 1,
+                                       keepdims=True)
+
+        t = target_indices.data.flatten()
         p = softmax_output.reshape(len(t), -1)
         target_dist = np.eye(p.shape[1])[t]
         loss = -(np.log(p) * (target_dist)).sum(1).mean()
@@ -251,12 +274,3 @@ class Tensor(object):
             return out
 
         return Tensor(loss)
-
-    def categorail_cross_entropy(self, target_indices):
-        return Tensor()
-
-    def __repr__(self):
-        return str(self.data.__repr__())
-
-    def __str__(self):
-        return str(self.data.__str__())
