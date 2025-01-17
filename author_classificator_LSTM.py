@@ -11,7 +11,7 @@ import numpy as np
 from classes.Embedding import Embedding
 from classes.SGD import SGD
 from classes.Tensor import Tensor
-from classes.cells import LSTMCell
+from classes.cells import LSTMCell, RNNCell
 from classes.losses import CrossEntropyLoss
 
 np.random.seed(0)
@@ -21,9 +21,10 @@ def readText(fileName):  # функция принимает имя файла
     f = open(fileName, 'r', encoding="UTF-8")  # задаем открытие нужного файла в режиме чтения
     text = f.read()  # читаем текст
     text = text.replace("\n", " ")  # переносы строки переводим в пробелы
-    text = re.sub('[–—!"#$%&«»…()*+,-./:;<=>?@[\\]^_`{|}~\t\n\xa0–\ufeff]', '', text)
+    text = re.sub('[–—!"#$%&«»…()*+,-./:;<=>?@[\\]^_`{|}~\t\n\xa0–\ufeff]', ' ', text)
 
-    return text.lower()  # функция возвращает текст файла
+    # return text.lower()[:(len(text) // 2)]  # функция возвращает текст файла
+    return text.lower()
 
 
 ###########################
@@ -36,9 +37,9 @@ def getSetFromIndexes(wordIndexes, xLen, step):
     index = 0
 
     # Идём по всей длине вектора индексов
-    # "Откусываем" векторы длины xLen и смещаеммся вперёд на step
+    # "Откусываем" векторы длины xLen и смещаемся вперёд на step
 
-    while (index + xLen <= wordsLen):
+    while index + xLen <= wordsLen:
         xSample.append(wordIndexes[index:index + xLen])
         index += step
 
@@ -81,10 +82,10 @@ def createSetsMultiClasses(wordIndexes, xLen,
     xSamples = np.array(xSamples)  # переводим в массив numpy для подачи в нейронку
     ySamples = np.array(ySamples)  # переводим в массив numpy для подачи в нейронку
 
-    return (xSamples, ySamples)  # функция возвращает выборку и соответствующие векторы классов
+    return xSamples, ySamples  # функция возвращает выборку и соответствующие векторы классов
 
 
-def prepare_data(data_folder, xLen, step):
+def prepare_data(data_folder, xLen, step, max_words):
     txt_files = glob.glob(f"{data_folder}/*.txt", recursive=True)
 
     # Загружаем обучающие тексты
@@ -99,41 +100,57 @@ def prepare_data(data_folder, xLen, step):
     for file_name in test_files:
         testText.append(readText(file_name))
 
-    className = ["О. Генри", "Стругацкие", "Булгаков", "Саймак", "Фрай", "Брэдбери"]
+    className = ["Булгаков", "Саймак", "Фрай", "О. Генри", "Брэдбери", "Стругацкие"]
     nClasses = len(className)
 
-    tokens = list(map(lambda x: set(x.split(" ")), trainText))
-    vocab = set()
+    # разбиваем тексты на токены
+    tokens = list(map(lambda x: x.split(" "), trainText))
+    # составляем словарь, сортированный по возрастанию (т.к использовать будем не весь)
+    vocab_dict = dict()
     for sent in tokens:
         for word in sent:
             if len(word) > 0:
-                vocab.add(word)
-    vocab = list(vocab)
+                if word in vocab_dict.keys():
+                    vocab_dict[word] += 1
+                else:
+                    vocab_dict[word] = 1
 
+    sorted_vocab_dict = sorted(vocab_dict.items(), key=lambda x: x[1], reverse=True)
+    vocab = [word for word, count in sorted_vocab_dict]
+
+    # Переводим слова в индексы
     word2index = {}
     for i, word in enumerate(vocab):
-        word2index[word] = i
+        if i < max_words - 1:
+            word2index[word] = i
+        else:
+            word2index[word] = max_words - 1 # ограничиваем словарь при обучении
 
+    # Переводим тексты в индексы
     input_dataset = list()
     for sent in tokens:
         sent_indices = list()
         for word in sent:
-            try:
-                sent_indices.append(word2index[word])
-            except:
-                ""
-        input_dataset.append(list(set(sent_indices)))
+            if len(word) > 0:
+                try:
+                    sent_indices.append(word2index[word])
+                except:
+                    ""
+        input_dataset.append(sent_indices)
+        print(sent[:20], sent_indices[:20])
 
+    # Переводим тексты в индексы для тестовых выборок
     test_dataset = list()
-    tokens_test = list(map(lambda x: set(x.split(" ")), testText))
+    tokens_test = list(map(lambda x: x.split(" "), testText))
     for sent in tokens_test:
         sent_indices = list()
         for word in sent:
-            try:
-                sent_indices.append(word2index[word])
-            except:
-                ""
-        test_dataset.append(list(set(sent_indices)))
+            if len(word) > 0:
+                try:
+                    sent_indices.append(word2index[word])
+                except:
+                    ""
+        test_dataset.append(sent_indices)
 
     print("Статистика по обучающим текстам:")
     len_train_text = 0
@@ -162,15 +179,15 @@ def prepare_data(data_folder, xLen, step):
     print(xTest.shape)
     print(yTest.shape)
 
-    return xTrain, yTrain, xTest, yTest, len(vocab)
+    return xTrain, yTrain, xTest, yTest, max_words
 
 
-def generate_prediction(model, xTest, yTest, vocabSize):
+def generate_prediction(model, xTest, yTest, vocabSize, batch_size):
     embed = Embedding(vocab_size=vocabSize, dim=512)
     hidden = model.init_hidden(batch_size=1)
     total_right_answers = 0
 
-    possible_vars = [[int(j == i) for j in range(64)] for i in range(6)]
+    possible_vars = [[int(j == i) for j in range(batch_size)] for i in range(6)]
 
     for i, input_test in enumerate(xTest):
         input = Tensor(input_test)
@@ -188,20 +205,20 @@ def generate_prediction(model, xTest, yTest, vocabSize):
         vars_count = [normalized_output_all.count(var) for var in possible_vars]
         m = vars_count.index(max(vars_count))
 
-        total_right_answers += int(sum(possible_vars[m] == yTest[i]) == 64)
+        total_right_answers += int(sum(possible_vars[m] == yTest[i]) == batch_size)
     print(f"\n Процент правильных ответов: {round(total_right_answers / len(xTest) * 100, 2)}%")
 
 
 def train(model, batch_size, xTrain, yTrain, vocabSize, iterations=100):
     model.w_ho.weight.data *= 0
     embed = Embedding(vocab_size=vocabSize, dim=512)  # задаем эмбеддинг
-    criterion = CrossEntropyLoss()
+    criterion = CategorialCrossEntropyLoss()
     optim = SGD(parameters=model.get_parameters() + embed.get_parameters(),
                 alpha=0.05)  # оптимизатор - стох. градиентный спуск
 
     bptt = 25  # граница усечения (количество шагов обратного распространения)
 
-    n_batches = xTrain.shape[0] # число батчей
+    n_batches = xTrain.shape[0]  # число батчей
 
     n_bptt = int(((n_batches - 1) / bptt))
     input_batches = xTrain[:n_bptt * bptt].reshape(n_bptt, bptt, batch_size)
@@ -214,8 +231,9 @@ def train(model, batch_size, xTrain, yTrain, vocabSize, iterations=100):
         hidden = model.init_hidden(batch_size=batch_size)  # скрытый слой
         for batch_i in range(len(input_batches)):
 
-            hidden = (Tensor(hidden[0].data, autograd=True),
-                      Tensor(hidden[1].data, autograd=True))  # в отличие от RNN тут два скрытых вектора
+            # hidden = (Tensor(hidden[0].data, autograd=True),
+            #           Tensor(hidden[1].data, autograd=True))  # в отличие от RNN тут два скрытых вектора
+            hidden = Tensor(hidden.data, autograd=True)
             loss = None
             losses = list()
             for t in range(bptt):
@@ -249,17 +267,20 @@ def train(model, batch_size, xTrain, yTrain, vocabSize, iterations=100):
             log += " - Min Loss:" + str(min_loss)[0:5]
             log += " - Loss:" + str(np.exp(total_loss / (batch_i + 1)))
             sys.stdout.write(log)
-            generate_prediction(model, xTest, yTest, vocabSize)
         optim.alpha *= 0.99
         print()
+        generate_prediction(model, xTest, yTest, vocabSize, batch_size)
     return model
 
 
 # Задаём базовые параметры
 step = 100  # Шаг разбиения исходного текста на обучающие вектора
-batch_size = 64 # Длина отрезка текста, по которой анализируем, в словах
+batch_size = 16  # Длина отрезка текста, по которой анализируем, в словах
+max_words = 15000 # максимальное число слов для обучения
 
-xTrain, yTrain, xTest, yTest, vocabSize = prepare_data(r"data/Тексты писателей", batch_size, step)
-model = LSTMCell(n_inputs=512, n_hidden=512, n_output=64)  # LSTM сеть с размерностью скрытого состояния 512
+xTrain, yTrain, xTest, yTest, vocabSize = prepare_data(r"data/Тексты писателей", batch_size, step, max_words)
+model = RNNCell(n_inputs=512, n_hidden=512, n_output=batch_size)  # LSTM сеть с размерностью скрытого состояния 512
 model = train(model, batch_size, xTrain, yTrain, vocabSize)
-generate_prediction(model, xTest, yTest, vocabSize)
+generate_prediction(model, xTest, yTest, vocabSize, batch_size)
+
+# TODO уменьшить выборки в 10 раз, категориальная кроссэнтропия, в конце вернуть лстм

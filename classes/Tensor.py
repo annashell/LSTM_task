@@ -252,6 +252,9 @@ class Tensor(object):
 
         return Tensor(loss)
 
+    def categorail_cross_entropy(self, target_indices):
+        return Tensor()
+
     def __repr__(self):
         return str(self.data.__repr__())
 
