@@ -31,9 +31,9 @@ class RNNCell(Layer):
         self.parameters += self.w_ho.get_parameters()
 
     def forward(self, input, hidden):
-        from_prev_hidden = self.w_hh.forward(hidden)
-        combined = self.w_ih.forward(input) + from_prev_hidden
-        new_hidden = self.activation.forward(combined)
+        from_prev_hidden = self.w_hh.forward(hidden) # достаем информацию о предыдущих состояниях из скрытого вектора
+        combined = self.w_ih.forward(input) + from_prev_hidden # добавляем агрегированную информацию о предыдущих состояниях
+        new_hidden = self.activation.forward(combined) # обучаем на комбинации текущего вектора и информации о предыдущих
         output = self.w_ho.forward(new_hidden)
         return output, new_hidden
 
@@ -50,17 +50,17 @@ class LSTMCell(Layer):
         self.n_hidden = n_hidden
         self.n_output = n_output
 
-        self.xf = Linear(n_inputs, n_hidden)
-        self.xi = Linear(n_inputs, n_hidden)
-        self.xo = Linear(n_inputs, n_hidden)
-        self.xc = Linear(n_inputs, n_hidden)
+        self.xf = Linear(n_inputs, n_hidden) # веса слоя вентиля забывания, умн. на вх. вектор
+        self.xi = Linear(n_inputs, n_hidden) # веса слоя входного вентиля, умн. на вх. вектор
+        self.xo = Linear(n_inputs, n_hidden) # веса слоя выходного вентиля, умн. на вх. вектор
+        self.xc = Linear(n_inputs, n_hidden) # веса слоя вентиля обновления, умн. на вх. вектор
 
-        self.hf = Linear(n_hidden, n_hidden, bias=False)
-        self.hi = Linear(n_hidden, n_hidden, bias=False)
-        self.ho = Linear(n_hidden, n_hidden, bias=False)
-        self.hc = Linear(n_hidden, n_hidden, bias=False)
+        self.hf = Linear(n_hidden, n_hidden, bias=False) # веса вектора скрытого состояния вентиля забывания
+        self.hi = Linear(n_hidden, n_hidden, bias=False) # веса вектора скрытого состояния входного вентиля
+        self.ho = Linear(n_hidden, n_hidden, bias=False) # веса вектора скрытого состояния выходного вентиля
+        self.hc = Linear(n_hidden, n_hidden, bias=False) # веса вектора скрытого состояния вентиля обновления
 
-        self.w_ho = Linear(n_hidden, n_output, bias=False)
+        self.w_ho = Linear(n_hidden, n_output, bias=False) # веса
 
         self.parameters += self.xf.get_parameters()
         self.parameters += self.xi.get_parameters()
@@ -82,7 +82,7 @@ class LSTMCell(Layer):
         i = (self.xi.forward(input) + self.hi.forward(prev_hidden)).sigmoid()  # входной вентиль
         o = (self.xo.forward(input) + self.ho.forward(prev_hidden)).sigmoid()  # выходной вентиль
         u = (self.xc.forward(input) + self.hc.forward(prev_hidden)).tanh()  # вентиль обновления
-        c = (f * prev_cell) + (i * u)
+        c = (f * prev_cell) + (i * u) # обновляем долгосрочную информацию
 
         h = o * c.tanh()  # скрытый слой
 
