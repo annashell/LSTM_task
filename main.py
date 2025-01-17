@@ -254,7 +254,7 @@ def generate_prediction(model, xTest, yTest, vocabSize, hidden_layer_size):
     return val_accuracy
 
 
-def train(model, batch_size, xTrain, yTrain, xTest, yTest, vocabSize, bptt, hidden_layer_size, iterations=300):
+def train(model, batch_size, xTrain, yTrain, xTest, yTest, vocabSize, bptt, hidden_layer_size, iterations=100):
     """
     Запуск обучения нейронной сети
     :param model:
@@ -354,9 +354,9 @@ def launch_training():
     # Задаём базовые параметры
     step = 100  # Шаг разбиения исходного текста на обучающие вектора
     batch_size = 200  # Длина отрезка текста, по которой анализируем, в словах
-    bptt = 25  # граница усечения (количество шагов обратного распространения)
+    bptt = 15  # граница усечения (количество шагов обратного распространения)
     max_words = 10000  # максимальное число слов для обучения
-    hidden_layer_size = 50
+    hidden_layer_size = 20
 
     xTrain, yTrain, xTest, yTest, vocabSize = prepare_data(r"data/Тексты писателей", batch_size, step,
                                                            max_words)  # получаем тестовую и обучающую выборки
@@ -374,7 +374,7 @@ def launch_training():
     plt.xlabel(f'Эпоха обучения, общее время обучения: {total_time} минут')
     plt.ylabel('Доля верных ответов')
     plt.legend()
-    plt.savefig(f"img/val_ac_{batch_size}_{step}_{hidden_layer_size}_{max_words}.png")
+    plt.savefig(f"img/val_ac_{batch_size}_{step}_{hidden_layer_size}_{max_words}_{bptt}.png")
     plt.clf()
 
     plt.figure(figsize=(14, 7))
