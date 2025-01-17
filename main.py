@@ -4,6 +4,7 @@
 import glob
 import re
 import sys
+import time
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -21,7 +22,7 @@ def readText(fileName):  # функция принимает имя файла
     f = open(fileName, 'r', encoding="UTF-8")  # задаем открытие нужного файла в режиме чтения
     text = f.read()  # читаем текст
     text = text.replace("\n", " ")  # переносы строки переводим в пробелы
-    text = re.sub('[–—!"#$%&«»…()*+,-./:;<=>?@[\\]^_`{|}~\t\n\xa0–\ufeff]', ' ', text) # удаляем лишние символы
+    text = re.sub('[–—!"#$%&«»…()*+,-./:;<=>?@[\\]^_`{|}~\t\n\xa0–\ufeff]', ' ', text)  # удаляем лишние символы
 
     # return text.lower()[:(len(text) // 2)]  # функция возвращает текст файла
     return text.lower()[:(len(text) // 10)]
@@ -253,7 +254,7 @@ def generate_prediction(model, xTest, yTest, vocabSize, hidden_layer_size):
     return val_accuracy
 
 
-def train(model, batch_size, xTrain, yTrain, xTest, yTest, vocabSize, bptt, hidden_layer_size, iterations=5):
+def train(model, batch_size, xTrain, yTrain, xTest, yTest, vocabSize, bptt, hidden_layer_size, iterations=300):
     """
     Запуск обучения нейронной сети
     :param model:
@@ -281,8 +282,10 @@ def train(model, batch_size, xTrain, yTrain, xTest, yTest, vocabSize, bptt, hidd
 
     val_accuracy_arr = []
     accuracy_arr = []
+    loss_history = []
 
     min_loss = 1000
+    time_0 = time.time()
     for iter in range(iterations):
         total_loss, n_loss = (0, 0)
 
@@ -290,18 +293,20 @@ def train(model, batch_size, xTrain, yTrain, xTest, yTest, vocabSize, bptt, hidd
         for batch_i in range(len(input_batches)):
 
             hidden = (Tensor(hidden[0].data, autograd=True),
-                      Tensor(hidden[1].data, autograd=True))  # в отличие от RNN тут два скрытых вектора (долгоср. и кратковр. память)
+                      Tensor(hidden[1].data,
+                             autograd=True))  # в отличие от RNN тут два скрытых вектора (долгоср. и кратковр. память)
             # hidden = Tensor(hidden.data, autograd=True)
             loss = None
             losses = list()
             for t in range(bptt):
-                input = Tensor(input_batches[batch_i][t], autograd=True) # представляем входной вектор в виде тензора
-                rnn_input = embed.forward(input=input) # получаем эмбеддинг
+                input = Tensor(input_batches[batch_i][t], autograd=True)  # представляем входной вектор в виде тензора
+                rnn_input = embed.forward(input=input)  # получаем эмбеддинг
                 output, hidden = model.forward(input=rnn_input, hidden=hidden)  # прямое распространение рек.сети
 
-                target = Tensor(target_batches[batch_i][t], autograd=True) # представляем тестовый вектор в виде тензора
+                target = Tensor(target_batches[batch_i][t],
+                                autograd=True)  # представляем тестовый вектор в виде тензора
                 # считаем потери
-                batch_loss = criterion.forward(output, target) # считаем кросс-энтропию, считаем потерю
+                batch_loss = criterion.forward(output, target)  # считаем кросс-энтропию, считаем потерю
                 losses.append(batch_loss)
                 if t == 0:
                     loss = batch_loss
@@ -312,7 +317,7 @@ def train(model, batch_size, xTrain, yTrain, xTest, yTest, vocabSize, bptt, hidd
             # обратный ход
             loss.backward()
 
-            optim.step() # оптимизация стох. гр. спуском
+            optim.step()  # оптимизация стох. гр. спуском
 
             total_loss += loss.data / bptt
             epoch_loss = np.exp(total_loss / (batch_i + 1))
@@ -328,13 +333,17 @@ def train(model, batch_size, xTrain, yTrain, xTest, yTest, vocabSize, bptt, hidd
         #     generate_prediction(model, xTest, yTest, vocabSize, batch_size)
         optim.alpha *= 0.99
         print()
-        val_ac = generate_prediction(model, xTest, yTest, vocabSize, hidden_layer_size)  # смотрим процент правильных ответов на данной итерации
+        val_ac = generate_prediction(model, xTest, yTest, vocabSize,
+                                     hidden_layer_size)  # смотрим процент правильных ответов на данной итерации
         val_accuracy_arr.append(val_ac)
-        ac = generate_prediction(model, xTrain, yTrain, vocabSize, hidden_layer_size)  # смотрим процент правильных ответов на данной итерации
+        ac = generate_prediction(model, xTrain, yTrain, vocabSize,
+                                 hidden_layer_size)  # смотрим процент правильных ответов на данной итерации
         accuracy_arr.append(ac)
+        loss_history.append(total_loss)
         print(f"\n Процент правильных ответов: {ac}%")
         print(f"\n Процент правильных ответов на тестовой выборке: {val_ac}%")
-    return model, accuracy_arr, val_accuracy_arr
+        print(f"Время обучения, {(time.time() - time_0) // 60 } min")
+    return model, accuracy_arr, val_accuracy_arr, loss_history, (time.time() - time_0) // 60
 
 
 def launch_training():
@@ -343,15 +352,18 @@ def launch_training():
     :return:
     """
     # Задаём базовые параметры
-    step = 32  # Шаг разбиения исходного текста на обучающие вектора
-    batch_size = 64  # Длина отрезка текста, по которой анализируем, в словах
+    step = 100  # Шаг разбиения исходного текста на обучающие вектора
+    batch_size = 200  # Длина отрезка текста, по которой анализируем, в словах
     bptt = 25  # граница усечения (количество шагов обратного распространения)
-    max_words = 5000  # максимальное число слов для обучения
-    hidden_layer_size = 128
+    max_words = 10000  # максимальное число слов для обучения
+    hidden_layer_size = 50
 
-    xTrain, yTrain, xTest, yTest, vocabSize = prepare_data(r"data/Тексты писателей", batch_size, step, max_words)  # получаем тестовую и обучающую выборки
-    model = LSTMCell(n_inputs=hidden_layer_size, n_hidden=hidden_layer_size, n_output=6)  # LSTM сеть с размерностью скрытого состояния hidden_layer_size
-    model, accuracy_arr, val_accuracy_arr = train(model, batch_size, xTrain, yTrain, xTest, yTest, vocabSize, bptt, hidden_layer_size) # обучаем сеть
+    xTrain, yTrain, xTest, yTest, vocabSize = prepare_data(r"data/Тексты писателей", batch_size, step,
+                                                           max_words)  # получаем тестовую и обучающую выборки
+    model = LSTMCell(n_inputs=hidden_layer_size, n_hidden=hidden_layer_size,
+                     n_output=6)  # LSTM сеть с размерностью скрытого состояния hidden_layer_size
+    model, accuracy_arr, val_accuracy_arr, loss_history, total_time = train(model, batch_size, xTrain, yTrain, xTest, yTest,
+                                                                vocabSize, bptt, hidden_layer_size)  # обучаем сеть
 
     # Строим график для отображения динамики обучения и точности предсказания сети
     plt.figure(figsize=(14, 7))
@@ -359,10 +371,20 @@ def launch_training():
              label='Доля верных ответов на обучающем наборе')
     plt.plot(val_accuracy_arr,
              label='Доля верных ответов на проверочном наборе')
-    plt.xlabel('Эпоха обучения')
+    plt.xlabel(f'Эпоха обучения, общее время обучения: {total_time} минут')
     plt.ylabel('Доля верных ответов')
     plt.legend()
-    plt.savefig(f"val_ac{batch_size}_{step}_{hidden_layer_size}.png")
+    plt.savefig(f"img/val_ac_{batch_size}_{step}_{hidden_layer_size}_{max_words}.png")
+    plt.clf()
+
+    plt.figure(figsize=(14, 7))
+    plt.plot(loss_history,
+             label='Значение ошибки на обучающем наборе')
+    plt.xlabel(f'Эпоха обучения, общее время обучения: {total_time} минут')
+    plt.ylabel('Значение ошибки')
+    plt.legend()
+    plt.savefig(f"img/loss_{batch_size}_{step}_{hidden_layer_size}_{max_words}.png")
+
 
 if __name__ == '__main__':
     launch_training()
