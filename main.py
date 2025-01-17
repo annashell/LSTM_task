@@ -383,7 +383,7 @@ def launch_training():
     plt.xlabel(f'Эпоха обучения, общее время обучения: {total_time} минут')
     plt.ylabel('Значение ошибки')
     plt.legend()
-    plt.savefig(f"img/loss_{batch_size}_{step}_{hidden_layer_size}_{max_words}.png")
+    plt.savefig(f"img/loss_{batch_size}_{step}_{hidden_layer_size}_{max_words}_{bptt}.png")
 
 
 if __name__ == '__main__':
