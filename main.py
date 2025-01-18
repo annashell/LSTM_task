@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 from classes.Embedding import Embedding
 from classes.SGD import SGD
 from classes.Tensor import Tensor
-from classes.cells import LSTMCell, RNNCell
+from classes.cells import LSTMCell, RNNCell, Dropout
 from classes.losses import CrossEntropyLoss
 
 np.random.seed(0)
@@ -254,7 +254,7 @@ def generate_prediction(model, xTest, yTest, vocabSize, hidden_layer_size):
     return val_accuracy
 
 
-def train(model, batch_size, xTrain, yTrain, xTest, yTest, vocabSize, bptt, hidden_layer_size, iterations=100):
+def train(model, batch_size, xTrain, yTrain, xTest, yTest, vocabSize, bptt, hidden_layer_size, iterations=50):
     """
     Запуск обучения нейронной сети
     :param model:
@@ -301,6 +301,7 @@ def train(model, batch_size, xTrain, yTrain, xTest, yTest, vocabSize, bptt, hidd
             for t in range(bptt):
                 input = Tensor(input_batches[batch_i][t], autograd=True)  # представляем входной вектор в виде тензора
                 rnn_input = embed.forward(input=input)  # получаем эмбеддинг
+                rnn_input = Dropout(0.2).forward(rnn_input)
                 output, hidden = model.forward(input=rnn_input, hidden=hidden)  # прямое распространение рек.сети
 
                 target = Tensor(target_batches[batch_i][t],
@@ -354,9 +355,9 @@ def launch_training():
     # Задаём базовые параметры
     step = 100  # Шаг разбиения исходного текста на обучающие вектора
     batch_size = 200  # Длина отрезка текста, по которой анализируем, в словах
-    bptt = 35  # граница усечения (количество шагов обратного распространения)
+    bptt = 25  # граница усечения (количество шагов обратного распространения)
     max_words = 10000  # максимальное число слов для обучения
-    hidden_layer_size = 20
+    hidden_layer_size = 6
 
     xTrain, yTrain, xTest, yTest, vocabSize = prepare_data(r"data/Тексты писателей", batch_size, step,
                                                            max_words)  # получаем тестовую и обучающую выборки
@@ -374,7 +375,7 @@ def launch_training():
     plt.xlabel(f'Эпоха обучения, общее время обучения: {total_time} минут')
     plt.ylabel('Доля верных ответов')
     plt.legend()
-    plt.savefig(f"img/val_ac_{batch_size}_{step}_{hidden_layer_size}_{max_words}_{bptt}.png")
+    plt.savefig(f"img/val_ac_{batch_size}_{step}_{hidden_layer_size}_{max_words}_{bptt}_2.png")
     plt.clf()
 
     plt.figure(figsize=(14, 7))
@@ -383,7 +384,7 @@ def launch_training():
     plt.xlabel(f'Эпоха обучения, общее время обучения: {total_time} минут')
     plt.ylabel('Значение ошибки')
     plt.legend()
-    plt.savefig(f"img/loss_{batch_size}_{step}_{hidden_layer_size}_{max_words}_{bptt}.png")
+    plt.savefig(f"img/loss_{batch_size}_{step}_{hidden_layer_size}_{max_words}_{bptt}_2.png")
 
 
 if __name__ == '__main__':

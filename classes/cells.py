@@ -95,3 +95,22 @@ class LSTMCell(Layer):
         init_hidden.data[:, 0] += 1
         init_cell.data[:, 0] += 1
         return (init_hidden, init_cell)
+
+
+class Dropout:
+    def __init__(self, rate):
+        self.rate = rate  # Вероятность "выброса" нейронов
+        self.mask = None  # Маска для Dropout
+
+    def forward(self, x, training=True):
+        if training:
+            # Генерируем маску: 1 - сохраняем нейрон, 0 - выбрасываем
+            self.mask = np.random.binomial(1, 1 - self.rate, size=x.data.shape)
+            x.data = x.data * self.mask
+            return x # Применяем маску к входным данным
+        else:
+            return x  # Просто возвращаем входные данные
+
+    def backward(self, dout):
+        # Применяем маску к градиентам
+        return dout * self.mask
