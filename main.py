@@ -10,6 +10,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from classes.Embedding import Embedding
+from classes.Linear import Linear
 from classes.SGD import SGD
 from classes.Tensor import Tensor
 from classes.cells import LSTMCell, RNNCell, Dropout
@@ -273,6 +274,7 @@ def train(model, batch_size, xTrain, yTrain, xTest, yTest, vocabSize, bptt, hidd
     optim = SGD(parameters=model.get_parameters() + embed.get_parameters(),
                 alpha=0.05)  # оптимизатор - стох. градиентный спуск
 
+    linear = Linear(hidden_layer_size, 6)
     n_batches = xTrain.shape[0]  # число батчей
 
     n_bptt = int(((n_batches - 1) / bptt))
@@ -304,6 +306,7 @@ def train(model, batch_size, xTrain, yTrain, xTest, yTest, vocabSize, bptt, hidd
                 rnn_input = Dropout(0.2).forward(rnn_input)
                 output, hidden = model.forward(input=rnn_input, hidden=hidden)  # прямое распространение рек.сети
                 output = Dropout(0.1).forward(output)
+                output = linear.forward(output)
 
                 target = Tensor(target_batches[batch_i][t],
                                 autograd=True)  # представляем тестовый вектор в виде тензора
@@ -358,12 +361,12 @@ def launch_training():
     batch_size = 200  # Длина отрезка текста, по которой анализируем, в словах
     bptt = 25  # граница усечения (количество шагов обратного распространения)
     max_words = 10000  # максимальное число слов для обучения
-    hidden_layer_size = 6
+    hidden_layer_size = 20
 
     xTrain, yTrain, xTest, yTest, vocabSize = prepare_data(r"data/Тексты писателей", batch_size, step,
                                                            max_words)  # получаем тестовую и обучающую выборки
     model = LSTMCell(n_inputs=hidden_layer_size, n_hidden=hidden_layer_size,
-                     n_output=6)  # LSTM сеть с размерностью скрытого состояния hidden_layer_size
+                     n_output=hidden_layer_size)  # LSTM сеть с размерностью скрытого состояния hidden_layer_size
     model, accuracy_arr, val_accuracy_arr, loss_history, total_time = train(model, batch_size, xTrain, yTrain, xTest, yTest,
                                                                 vocabSize, bptt, hidden_layer_size)  # обучаем сеть
 
