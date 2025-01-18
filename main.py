@@ -303,6 +303,7 @@ def train(model, batch_size, xTrain, yTrain, xTest, yTest, vocabSize, bptt, hidd
                 rnn_input = embed.forward(input=input)  # получаем эмбеддинг
                 rnn_input = Dropout(0.2).forward(rnn_input)
                 output, hidden = model.forward(input=rnn_input, hidden=hidden)  # прямое распространение рек.сети
+                output = Dropout(0.1).forward(output)
 
                 target = Tensor(target_batches[batch_i][t],
                                 autograd=True)  # представляем тестовый вектор в виде тензора
